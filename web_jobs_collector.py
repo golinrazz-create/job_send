@@ -21,8 +21,8 @@ EMAIL_RECEIVER = os.getenv("EMAIL_RECEIVER") or EMAIL_SENDER
 HISTORY_FILE = os.getenv("WEB_HISTORY_FILE", "web_seen_history.json")
 MAX_HISTORY_ITEMS = 500
 
-# Профильные ключевые слова для фильтрации ленты VC.ru (чтобы отсечь нерелевантные роли)
-VC_KEYWORDS = (
+# Профильные ключевые слова (редакция/контент/медиа + SMM + AI/ИИ)
+PROFILE_KEYWORDS = (
     "редактор",
     "главред",
     "шеф-редактор",
@@ -32,14 +32,30 @@ VC_KEYWORDS = (
     "копирайтер",
     "журналист",
     "редакц",
-    "smm",
-    "смм",
-    "ai",
-    "ии",
-    "нейросет",
+    "сценарист",
     "бренд-медиа",
     "editorial",
     "content",
+    "smm",
+    "смм",
+    "соцсет",
+    "социальн",
+    "ai",
+    "ии",
+    "нейросет",
+    "искусственн",
+    "промпт",
+    "llm",
+)
+
+# Стоп-слова для отсечения явного не-профиля и новостного шума
+EXCLUDE_KEYWORDS = (
+    "инженер-конструктор",
+    "бухгалтер",
+    "преподаватель",
+    "сми:",
+    "совет директоров",
+    "увозят команды",
 )
 
 # Разделы Kadrof.ru: все вакансии + при необходимости можно сузить до /work/cat15 (тексты) и /work/cat16 (маркетинг)
@@ -82,13 +98,22 @@ def save_history(history: Dict[str, List[str]]) -> None:
         json.dump(history, f, ensure_ascii=False, indent=2)
 
 
+def _has_keyword(low_text: str, kw: str) -> bool:
+    # Для коротких английских токенов ('ai', 'smm', 'llm') проверяем границы слов, чтобы не цеплять 'detail' или 'mail'
+    if kw.isascii() and len(kw) <= 4:
+        return re.search(rf"(?<![a-z0-9_]){re.escape(kw)}(?![a-z0-9_])", low_text) is not None
+    return kw in low_text
+
+
 def matches_profile(text: str) -> bool:
     low = text.lower()
-    return any(kw in low for kw in VC_KEYWORDS)
+    if any(bad in low for bad in EXCLUDE_KEYWORDS):
+        return False
+    return any(_has_keyword(low, kw) for kw in PROFILE_KEYWORDS)
 
 
 def fetch_kadrof(seen_ids: set) -> Tuple[List[Dict], str]:
-    """Собирает свежие объявления с Kadrof.ru через requests + BeautifulSoup."""
+    """Собирает свежие профильные объявления с Kadrof.ru через requests + BeautifulSoup."""
     found: List[Dict] = []
     local_seen = set()
 
@@ -121,6 +146,10 @@ def fetch_kadrof(seen_ids: set) -> Tuple[List[Dict], str]:
                 if parent:
                     raw_block = " ".join(parent.stripped_strings)
                     snippet = raw_block.replace(title, "", 1).strip()[:280]
+
+                combined_text = f"{title} {snippet}".strip()
+                if not matches_profile(combined_text):
+                    continue
 
                 local_seen.add(item_id)
                 found.append(
@@ -180,8 +209,8 @@ def _parse_vc_html(html: str, seen_ids: set) -> List[Dict]:
 
 def fetch_vc(seen_ids: set) -> Tuple[List[Dict], str]:
     """
-    Собирает вакансии из раздела VC.ru/hr:
-    1) Пробует лёгкий HTTP-запрос (API/HTML).
+    Собирает профильные публикации из раздела VC.ru/hr:
+    1) Пробует лёгкий HTTP-запрос (HTML/API).
     2) Если страница отдала 0 карточек из-за JS/антибота и установлен Playwright — использует его как резерв.
     """
     # Попытка 1: лёгкий HTML-запрос
