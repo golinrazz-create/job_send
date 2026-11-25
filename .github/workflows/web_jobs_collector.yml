@@ -1,0 +1,52 @@
+name: Web Jobs Collector (VC.ru & Kadrof)
+
+on:
+  schedule:
+    # Запуск дважды в день в 07:00 и 19:00 по Москве (UTC+3 -> 04:00 и 16:00 UTC)
+    - cron: '0 4,16 * * *'
+  # Позволяет запускать скрипт вручную во вкладке Actions -> Run workflow
+  workflow_dispatch:
+
+permissions:
+  # Права на запись нужны, чтобы коммитить обновлённый файл истории в репозиторий
+  contents: write
+
+jobs:
+  collect-web-jobs:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Скачать код репозитория
+        uses: actions/checkout@v4
+
+      - name: Настроить Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Установить зависимости
+        run: |
+          python -m pip install --upgrade pip
+          pip install requests beautifulsoup4
+
+      - name: Запустить сборщик вакансий
+        env:
+          EMAIL_SENDER: ${{ secrets.EMAIL_SENDER }}
+          EMAIL_PASSWORD: ${{ secrets.EMAIL_PASSWORD }}
+          EMAIL_RECEIVER: ${{ secrets.EMAIL_RECEIVER }}
+          SMTP_SERVER: ${{ secrets.SMTP_SERVER || 'smtp.gmail.com' }}
+          SMTP_PORT: ${{ secrets.SMTP_PORT || '465' }}
+          WEB_HISTORY_FILE: web_seen_history.json
+        run: python web_jobs_collector.py
+
+      - name: Сохранить обновлённую историю web_seen_history.json
+        run: |
+          git config --local user.email "github-actions[bot]@users.noreply.github.com"
+          git config --local user.name "github-actions[bot]"
+          git add web_seen_history.json
+          if ! git diff --staged --quiet; then
+            git commit -m "chore: update web_seen_history.json [skip ci]"
+            git push
+          else
+            echo "Новых записей в истории нет, коммит не требуется."
+          fi
