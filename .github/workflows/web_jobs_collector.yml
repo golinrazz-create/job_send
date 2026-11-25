@@ -43,10 +43,14 @@ jobs:
         run: |
           git config --local user.email "github-actions[bot]@users.noreply.github.com"
           git config --local user.name "github-actions[bot]"
-          git add web_seen_history.json
-          if ! git diff --staged --quiet; then
-            git commit -m "chore: update web_seen_history.json [skip ci]"
-            git push
+          if [ -f web_seen_history.json ]; then
+            git add web_seen_history.json
+            if ! git diff --staged --quiet; then
+              git commit -m "chore: update web_seen_history.json [skip ci]"
+              git push
+            else
+              echo "Изменений в web_seen_history.json нет."
+            fi
           else
-            echo "Новых записей в истории нет, коммит не требуется."
+            echo "Файл web_seen_history.json пока не создан (новых вакансий не было или письмо не отправлено)."
           fi
