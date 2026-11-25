@@ -16,7 +16,7 @@ SMTP_SERVER = os.getenv("SMTP_SERVER", "smtp.gmail.com")
 SMTP_PORT = int(os.getenv("SMTP_PORT", "465"))
 EMAIL_SENDER = os.getenv("EMAIL_SENDER", "")
 EMAIL_PASSWORD = os.getenv("EMAIL_PASSWORD", "")
-EMAIL_RECEIVER = os.getenv("EMAIL_RECEIVER", EMAIL_SENDER)
+EMAIL_RECEIVER = os.getenv("EMAIL_RECEIVER") or EMAIL_SENDER
 
 HISTORY_FILE = os.getenv("WEB_HISTORY_FILE", "web_seen_history.json")
 MAX_HISTORY_ITEMS = 500
